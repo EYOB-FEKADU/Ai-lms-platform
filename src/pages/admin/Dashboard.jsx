@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import Profile from '../../components/Profile';
-import { logoutUser, getAllUsers, updateUser, deleteUser, resetUserPassword } from '../../api';
+import { logoutUser, getAllUsers, updateUser, deleteUser, resetUserPassword, linkParentToStudent, getParentLinks } from '../../api';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function AdminDashboard({ user, onLogout }) {
@@ -12,11 +12,14 @@ export default function AdminDashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(false);
   const [filterRole, setFilterRole] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [parentLinks, setParentLinks] = useState([]);
+const [linkForm, setLinkForm] = useState({ parentEmail: '', studentEmail: '' });
+const [linkMessage, setLinkMessage] = useState('');
 
-  useEffect(() => {
-    if (activeTab === 'users') fetchUsers();
-  }, [activeTab, filterRole]);
-
+ useEffect(() => {
+  if (activeTab === 'users') fetchUsers();
+  if (activeTab === 'parents') fetchParentLinks();
+}, [activeTab, filterRole]);
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -56,7 +59,26 @@ export default function AdminDashboard({ user, onLogout }) {
       console.error('Failed to delete user');
     }
   };
+const fetchParentLinks = async () => {
+  try {
+    const data = await getParentLinks();
+    setParentLinks(data.parents || []);
+  } catch (err) {
+    console.error('Failed to fetch parent links');
+  }
+};
 
+const handleLinkParent = async () => {
+  setLinkMessage('');
+  try {
+    await linkParentToStudent(linkForm.parentEmail, linkForm.studentEmail);
+    setLinkMessage('Parent linked successfully!');
+    setLinkForm({ parentEmail: '', studentEmail: '' });
+    fetchParentLinks();
+  } catch (err) {
+    setLinkMessage(err.response?.data?.error || 'Failed to link');
+  }
+};
   const handleResetPassword = async (userId, userName) => {
     const newPassword = prompt('Enter new password for ' + userName + ' (min 6 characters):');
     if (!newPassword || newPassword.length < 6) {
@@ -76,6 +98,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const menuItems = [
     { id: 'dashboard', label: t('dashboard'), icon: '📊' },
     { id: 'users', label: t('users'), icon: '👥' },
+    { id: 'parents', label: 'Parent Links', icon: '🔗' },
     { id: 'institutions', label: t('institutions'), icon: '🏢' },
     { id: 'analytics', label: t('analytics'), icon: '📉' },
     { id: 'profile', label: t('profile'), icon: '👤' },
@@ -212,7 +235,68 @@ export default function AdminDashboard({ user, onLogout }) {
             )}
           </div>
         );
+case 'parents':
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+      <h2 className="text-xl font-semibold mb-6">🔗 Parent-Student Links</h2>
+      
+      {/* Link Form */}
+      <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-6">
+        <h3 className="font-medium mb-3">Link Parent to Student</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <input type="email" placeholder="Parent email" value={linkForm.parentEmail}
+            onChange={e => setLinkForm({ ...linkForm, parentEmail: e.target.value })}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-600 text-sm" />
+          <input type="email" placeholder="Student email" value={linkForm.studentEmail}
+            onChange={e => setLinkForm({ ...linkForm, studentEmail: e.target.value })}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-600 text-sm" />
+          <button onClick={handleLinkParent}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm">
+            Link
+          </button>
+        </div>
+        {linkMessage && (
+          <p className={`text-sm mt-2 ${linkMessage.includes('success') ? 'text-green-600' : 'text-red-600'}`}>
+            {linkMessage}
+          </p>
+        )}
+      </div>
 
+      {/* Existing Links */}
+      <h3 className="font-medium mb-3">Existing Links</h3>
+      {parentLinks.length === 0 ? (
+        <p className="text-gray-500 text-center py-4">No parent-student links yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {parentLinks.map(parent => (
+            <div key={parent._id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-sm">👨‍👩‍👧</div>
+                <div>
+                  <p className="font-medium text-sm">{parent.fullName}</p>
+                  <p className="text-xs text-gray-500">{parent.email}</p>
+                </div>
+              </div>
+              <div className="ml-11 space-y-1">
+                {parent.profile?.linkedChildren?.length > 0 ? (
+                  parent.profile.linkedChildren.map(child => (
+                    <div key={child._id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                      <span>👤</span>
+                      <span>{child.fullName}</span>
+                      <span className="text-xs text-gray-400">({child.email})</span>
+                      <span className="text-xs text-purple-500">{child.profile?.grade || ''}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400">No children linked</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
       case 'institutions':
         return (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">

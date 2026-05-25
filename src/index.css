@@ -116,3 +116,21 @@ body {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+/* Mobile responsive helpers */
+@media (max-width: 768px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  table {
+    font-size: 0.75rem;
+  }
+  
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+  
+  .hidden-mobile {
+    display: none;
+  }
+}

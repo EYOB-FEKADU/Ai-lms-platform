@@ -8,7 +8,6 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Add token to all requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token && config.headers) {
@@ -17,7 +16,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Login user
+// ─── AUTH ───
 export const loginUser = async (email, password) => {
   const response = await api.post('/auth/login', { email, password });
   if (response.data.token) {
@@ -27,63 +26,40 @@ export const loginUser = async (email, password) => {
   return response.data;
 };
 
-// Register user
 export const registerUser = async (userData) => {
-  try {
-    const response = await api.post('/auth/register', userData);
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
-    return response.data;
-  } catch (error) {
-    console.error('Register error:', error.response?.data || error.message);
-    throw error;
+  const response = await api.post('/auth/register', userData);
+  if (response.data.token) {
+    localStorage.setItem('token', response.data.token);
+    localStorage.setItem('user', JSON.stringify(response.data.user));
   }
+  return response.data;
 };
 
-// Logout user
 export const logoutUser = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
 };
 
-// Get current user from localStorage
 export const getCurrentUser = () => {
   const userStr = localStorage.getItem('user');
   return userStr ? JSON.parse(userStr) : null;
 };
 
-// Update user profile (using direct fetch to avoid recursion)
+// ─── PROFILE ───
 export const updateUserProfile = async (profileData) => {
-  try {
-    const token = localStorage.getItem('token');
-    console.log('Updating profile with:', profileData);
-    
-    const response = await fetch('http://localhost:5000/api/users/profile', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(profileData)
-    });
-    
-    const data = await response.json();
-    console.log('Update response:', data);
-    
-    if (response.ok && data.user) {
-      const currentUser = getCurrentUser();
-      const updatedUser = { ...currentUser, ...data.user };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      return data;
-    }
-    
-    throw new Error(data.error || 'Update failed');
-  } catch (error) {
-    console.error('Update profile error:', error);
-    throw error;
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/users/profile`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify(profileData)
+  });
+  const data = await response.json();
+  if (response.ok && data.user) {
+    const currentUser = getCurrentUser();
+    localStorage.setItem('user', JSON.stringify({ ...currentUser, ...data.user }));
+    return data;
   }
+  throw new Error(data.error || 'Update failed');
 };
 
 // Upload profile picture
@@ -117,27 +93,15 @@ export const uploadProfilePicture = async (file) => {
   }
 };
 
-// Get fresh user profile from server
 export const getUserProfile = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('http://localhost:5000/api/users/profile', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Get profile error:', error);
-    throw error;
-  }
+  const token = localStorage.getItem('token');
+  const response = await fetch(`${API_URL}/users/profile`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  return await response.json();
 };
 
-// ─── COURSE API FUNCTIONS ───
-
-// Get all published courses
+// ─── COURSES ───
 export const getCourses = async (params = {}) => {
   const query = new URLSearchParams();
   if (params.category) query.append('category', params.category);
@@ -145,155 +109,59 @@ export const getCourses = async (params = {}) => {
   if (params.language) query.append('language', params.language);
   if (params.search) query.append('search', params.search);
   if (params.page) query.append('page', params.page);
-
-  const response = await api.get(`/courses?${query.toString()}`);
-  return response.data;
+  return (await api.get(`/courses?${query.toString()}`)).data;
 };
 
-// Get single course
-export const getCourse = async (courseId) => {
-  const response = await api.get(`/courses/${courseId}`);
-  return response.data;
-};
+export const getCourse = async (courseId) => (await api.get(`/courses/${courseId}`)).data;
+export const createCourse = async (courseData) => (await api.post('/courses', courseData)).data;
+export const updateCourse = async (courseId, courseData) => (await api.put(`/courses/${courseId}`, courseData)).data;
+export const deleteCourse = async (courseId) => (await api.delete(`/courses/${courseId}`)).data;
+export const updateCourseStatus = async (courseId, status) => (await api.patch(`/courses/${courseId}/status`, { status })).data;
+export const getMyCourses = async () => (await api.get('/courses/my')).data;
 
-// Create course
-export const createCourse = async (courseData) => {
-  const response = await api.post('/courses', courseData);
-  return response.data;
-};
+// ─── MODULES ───
+export const getModules = async (courseId) => (await api.get(`/modules/courses/${courseId}/modules`)).data;
+export const createModule = async (courseId, moduleData) => (await api.post(`/modules/courses/${courseId}/modules`, moduleData)).data;
+export const updateModule = async (moduleId, moduleData) => (await api.put(`/modules/${moduleId}`, moduleData)).data;
+export const deleteModule = async (moduleId) => (await api.delete(`/modules/${moduleId}`)).data;
 
-// Update course
-export const updateCourse = async (courseId, courseData) => {
-  const response = await api.put(`/courses/${courseId}`, courseData);
-  return response.data;
-};
+// ─── LESSONS ───
+export const getLessons = async (moduleId) => (await api.get(`/lessons/modules/${moduleId}/lessons`)).data;
+export const getLesson = async (lessonId) => (await api.get(`/lessons/${lessonId}`)).data;
+export const createLesson = async (moduleId, lessonData) => (await api.post(`/lessons/modules/${moduleId}/lessons`, lessonData)).data;
+export const updateLesson = async (lessonId, lessonData) => (await api.put(`/lessons/${lessonId}`, lessonData)).data;
+export const deleteLesson = async (lessonId) => (await api.delete(`/lessons/${lessonId}`)).data;
 
-// Delete course
-export const deleteCourse = async (courseId) => {
-  const response = await api.delete(`/courses/${courseId}`);
-  return response.data;
-};
+// ─── ENROLLMENTS ───
+export const enrollCourse = async (courseId) => (await api.post(`/enrollments/courses/${courseId}/enroll`)).data;
+export const unenrollCourse = async (courseId) => (await api.delete(`/enrollments/courses/${courseId}/unenroll`)).data;
+export const getMyEnrolledCourses = async () => (await api.get('/enrollments/my-enrolled')).data;
+export const updateProgress = async (enrollmentId, data) => (await api.patch(`/enrollments/${enrollmentId}/progress`, data)).data;
 
-// Update course status
-export const updateCourseStatus = async (courseId, status) => {
-  const response = await api.patch(`/courses/${courseId}/status`, { status });
-  return response.data;
-};
-
-// Get instructor's courses
-export const getMyCourses = async () => {
-  const response = await api.get('/courses/my');
-  return response.data;
-};
-
-// ─── MODULE API FUNCTIONS ───
-
-// Get modules for a course
-export const getModules = async (courseId) => {
-  const response = await api.get(`/modules/courses/${courseId}/modules`);
-  return response.data;
-};
-
-// Create module
-export const createModule = async (courseId, moduleData) => {
-  const response = await api.post(`/modules/courses/${courseId}/modules`, moduleData);
-  return response.data;
-};
-
-// Update module
-export const updateModule = async (moduleId, moduleData) => {
-  const response = await api.put(`/modules/${moduleId}`, moduleData);
-  return response.data;
-};
-
-// Delete module
-export const deleteModule = async (moduleId) => {
-  const response = await api.delete(`/modules/${moduleId}`);
-  return response.data;
-};
-
-// ─── LESSON API FUNCTIONS ───
-
-// Get lessons for a module
-export const getLessons = async (moduleId) => {
-  const response = await api.get(`/lessons/modules/${moduleId}/lessons`);
-  return response.data;
-};
-
-// Get single lesson
-export const getLesson = async (lessonId) => {
-  const response = await api.get(`/lessons/${lessonId}`);
-  return response.data;
-};
-
-// Create lesson
-export const createLesson = async (moduleId, lessonData) => {
-  const response = await api.post(`/lessons/modules/${moduleId}/lessons`, lessonData);
-  return response.data;
-};
-
-// Update lesson
-export const updateLesson = async (lessonId, lessonData) => {
-  const response = await api.put(`/lessons/${lessonId}`, lessonData);
-  return response.data;
-};
-
-// Delete lesson
-export const deleteLesson = async (lessonId) => {
-  const response = await api.delete(`/lessons/${lessonId}`);
-  return response.data;
-};
-
-// ─── ENROLLMENT API FUNCTIONS ───
-
-// Enroll in a course
-export const enrollCourse = async (courseId) => {
-  const response = await api.post(`/enrollments/courses/${courseId}/enroll`);
-  return response.data;
-};
-
-// Unenroll from a course
-export const unenrollCourse = async (courseId) => {
-  const response = await api.delete(`/enrollments/courses/${courseId}/unenroll`);
-  return response.data;
-};
-
-// Get my enrolled courses
-export const getMyEnrolledCourses = async () => {
-  const response = await api.get('/enrollments/my-enrolled');
-  return response.data;
-};
-
-// Update progress
-export const updateProgress = async (enrollmentId, data) => {
-  const response = await api.patch(`/enrollments/${enrollmentId}/progress`, data);
-  return response.data;
-};
-// ─── ADMIN API FUNCTIONS ───
-
-// Get all users (admin only)
+// ─── ADMIN ───
 export const getAllUsers = async (params = {}) => {
   const query = new URLSearchParams();
   if (params.role) query.append('role', params.role);
   if (params.search) query.append('search', params.search);
-  const response = await api.get(`/admin/users?${query.toString()}`);
-  return response.data;
+  return (await api.get(`/admin/users?${query.toString()}`)).data;
 };
+export const updateUser = async (userId, userData) => (await api.put(`/admin/users/${userId}`, userData)).data;
+export const deleteUser = async (userId) => (await api.delete(`/admin/users/${userId}`)).data;
+export const resetUserPassword = async (userId, newPassword) => (await api.put(`/admin/users/${userId}/reset-password`, { newPassword })).data;
+export const linkParentToStudent = async (parentEmail, studentEmail) => (await api.post('/admin/users/link-parent', { parentEmail, studentEmail })).data;
+export const getParentLinks = async () => (await api.get('/admin/users/parent-links')).data;
 
-// Update user role/status (admin only)
-export const updateUser = async (userId, userData) => {
-  const response = await api.put(`/admin/users/${userId}`, userData);
-  return response.data;
-};
+// ─── PARENT ───
+export const getLinkedChildren = async () => (await api.get('/parent/children')).data;
+export const linkChild = async (childEmail) => (await api.post('/parent/link-child', { childEmail })).data;
+export const unlinkChild = async (childId) => (await api.delete(`/parent/unlink-child/${childId}`)).data;
+export const getChildProgress = async (childId) => (await api.get(`/parent/child/${childId}/progress`)).data;
 
-// Delete user (admin only)
-export const deleteUser = async (userId) => {
-  const response = await api.delete(`/admin/users/${userId}`);
-  return response.data;
-};
+// ─── MESSAGING ───
+export const sendMessage = async (messageData) => (await api.post('/messages', messageData)).data;
+export const getInbox = async () => (await api.get('/messages/inbox')).data;
+export const getSentMessages = async () => (await api.get('/messages/sent')).data;
+export const markAsRead = async (messageId) => (await api.patch(`/messages/${messageId}/read`)).data;
+export const getCourseInstructor = async (courseId) => (await api.get(`/messages/instructor/${courseId}`)).data;
+
 export default api;
-// Reset user password (admin only)
-export const resetUserPassword = async (userId, newPassword) => {
-  const response = await api.put(`/admin/users/${userId}/reset-password`, { newPassword });
-  return response.data;
-};
