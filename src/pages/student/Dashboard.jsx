@@ -1,4 +1,5 @@
 // pages/student/Dashboard.jsx
+import AITutorChat from '../../components/AITutorChat';
 import React, { useState } from 'react';
 import Navbar from '../../components/Navbar';
 import Profile from '../../components/Profile';
@@ -74,13 +75,13 @@ export default function StudentDashboard({ user, onLogout }) {
       case 'my-learning':
         return <MyLearning lessonId={selectedLessonId} onBack={() => setActiveTab('my-courses')} />;
 
-      case 'ai-tutor':
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">🤖 {t('aiTutor')}</h2>
-            <p className="text-gray-500 dark:text-gray-400">{t('comingSoon')}</p>
-          </div>
-        );
+     case 'ai-tutor':
+  return (
+    <AITutorChat 
+      studentLevel={user?.profile?.grade?.includes('primary') ? 'primary' : 'highschool'} 
+      language={user?.profile?.preferredLanguage || 'en'} 
+    />
+  );
 
       case 'profile':
         return <Profile user={user} />;

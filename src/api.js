@@ -165,3 +165,8 @@ export const markAsRead = async (messageId) => (await api.patch(`/messages/${mes
 export const getCourseInstructor = async (courseId) => (await api.get(`/messages/instructor/${courseId}`)).data;
 
 export default api;
+// ─── AI TUTOR ───
+export const askAITutor = async (data) => {
+  const response = await api.post('/tutor/ask', data);
+  return response.data;
+};
