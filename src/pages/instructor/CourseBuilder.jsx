@@ -1,4 +1,6 @@
 // pages/instructor/CourseBuilder.jsx
+import { indexCourseForAI } from '../../api';
+// import { indexCourseForAI } from '../../api';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -68,7 +70,23 @@ export default function CourseBuilder({ courseId: propCourseId, onSave, onCancel
       setSaving(false);
     }
   };
-
+const handleIndexForAI = async () => {
+  try {
+    let allContent = `Course: ${course.title}\n${course.description}\n\n`;
+    for (const mod of modules) {
+      allContent += `Module: ${mod.title}\n`;
+      if (mod.lessons) {
+        for (const lesson of mod.lessons) {
+          allContent += `Lesson: ${lesson.title}\n${lesson.content || ''}\n`;
+        }
+      }
+    }
+    await indexCourseForAI(courseId, allContent);
+    alert('✅ Course indexed for AI Tutor! Students will get course-specific answers.');
+  } catch (err) {
+    alert('❌ Failed to index course');
+  }
+};
   const handleAddModule = async () => {
     const title = prompt('Module title:');
     if (!title) return;
@@ -155,15 +173,18 @@ export default function CourseBuilder({ courseId: propCourseId, onSave, onCancel
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => onCancel ? onCancel() : navigate('/instructor')}
-          className="text-indigo-600 dark:text-indigo-400 hover:underline">
-          ← Back
-        </button>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {isEditing ? 'Edit Course' : 'Create New Course'}
-        </h1>
-      </div>
+      <div className="flex gap-3">
+  <button type="button" onClick={handleSaveCourse} disabled={saving}
+    className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
+    {saving ? 'Saving...' : isEditing ? 'Update Course' : 'Create Course'}
+  </button>
+  {isEditing && (
+    <button type="button" onClick={handleIndexForAI}
+      className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
+      🤖 Index for AI Tutor
+    </button>
+  )}
+</div>
 
       {message && (
         <div className={`p-4 rounded-lg mb-4 ${message.includes('Failed') || message.includes('failed')
@@ -223,6 +244,12 @@ export default function CourseBuilder({ courseId: propCourseId, onSave, onCancel
           className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
           {saving ? 'Saving...' : isEditing ? 'Update Course' : 'Create Course'}
         </button>
+        {isEditing && (
+  <button onClick={handleIndexForAI}
+    className="ml-3 px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
+    🤖 Index for AI Tutor
+  </button>
+)}
       </div>
 
       {/* Modules & Lessons */}

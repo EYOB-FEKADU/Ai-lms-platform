@@ -170,3 +170,22 @@ export const askAITutor = async (data) => {
   const response = await api.post('/tutor/ask', data);
   return response.data;
 };
+
+
+
+// Index course content for AI
+export const indexCourseForAI = async (courseId, content) => {
+  const response = await api.post('/tutor/index-course', { courseId, content });
+  return response.data;
+};
+
+// ─── CHAT HISTORY ───
+export const getChatHistory = async (courseId) => {
+  const response = await api.get(`/tutor/history/${courseId}`);
+  return response.data;
+};
+
+export const saveChatMessage = async (courseId, role, content) => {
+  const response = await api.post('/tutor/save-message', { courseId, role, content });
+  return response.data;
+};

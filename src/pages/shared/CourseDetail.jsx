@@ -1,4 +1,3 @@
-// pages/CourseDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCourse, getMyEnrolledCourses, enrollCourse } from '../../api';
@@ -79,7 +78,7 @@ export default function CourseDetail({ courseId: propCourseId, onBack, onStartLe
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Back Button */}
         <button
-         onClick={() => onBack ? onBack() : navigate('/courses')}
+          onClick={() => onBack ? onBack() : navigate('/courses')}
           className="text-indigo-600 dark:text-indigo-400 hover:underline mb-6 flex items-center gap-1"
         >
           ← Back to Courses
@@ -128,15 +127,24 @@ export default function CourseDetail({ courseId: propCourseId, onBack, onStartLe
                 <span className="text-yellow-500">⭐ {course.rating?.toFixed(1) || '0.0'}</span>
               </div>
 
-              {/* Enroll Button */}
+              {/* Enroll / Action Buttons */}
               {user?.role === 'student' && (
                 <div>
                   {isEnrolled ? (
-                    <button
-onClick={() => onStartLearning ? onStartLearning(lesson?._id) : navigate('/my-courses')}                      className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700"
-                    >
-                      Go to My Courses →
-                    </button>
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={() => onStartLearning ? onStartLearning() : navigate('/my-courses')}
+                        className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700"
+                      >
+                        Go to My Courses →
+                      </button>
+                      <button
+                        onClick={() => onStartLearning ? onStartLearning(null, id) : null}
+                        className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
+                      >
+                        🤖 Ask AI Tutor
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={handleEnroll}

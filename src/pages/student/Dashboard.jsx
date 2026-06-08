@@ -1,5 +1,3 @@
-// pages/student/Dashboard.jsx
-import AITutorChat from '../../components/AITutorChat';
 import React, { useState } from 'react';
 import Navbar from '../../components/Navbar';
 import Profile from '../../components/Profile';
@@ -7,6 +5,8 @@ import CourseCatalog from '../shared/CourseCatalog';
 import CourseDetail from '../shared/CourseDetail';
 import MyCourses from './MyCourses';
 import MyLearning from './MyLearning';
+import AITutorChat from '../../components/AITutorChat';
+import CourseWithAI from '../../components/CourseWithAI';
 import { logoutUser } from '../../api';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -67,7 +67,20 @@ export default function StudentDashboard({ user, onLogout }) {
 
       case 'course-detail':
         return <CourseDetail courseId={selectedCourseId} onBack={() => setActiveTab('courses')}
-          onStartLearning={(lessonId) => { setSelectedLessonId(lessonId); setActiveTab('my-learning'); }} />;
+          onStartLearning={(lessonId, courseId) => {
+            if (courseId) {
+              setSelectedCourseId(courseId);
+              setActiveTab('ai-tutor-course');
+            } else if (lessonId) {
+              setSelectedLessonId(lessonId);
+              setActiveTab('my-learning');
+            } else {
+              setActiveTab('my-courses');
+            }
+          }} />;
+
+      case 'ai-tutor-course':
+        return <CourseWithAI courseId={selectedCourseId} onBack={() => setActiveTab('course-detail')} />;
 
       case 'my-courses':
         return <MyCourses onCourseClick={(id) => { setSelectedCourseId(id); setActiveTab('course-detail'); }} />;
@@ -75,13 +88,13 @@ export default function StudentDashboard({ user, onLogout }) {
       case 'my-learning':
         return <MyLearning lessonId={selectedLessonId} onBack={() => setActiveTab('my-courses')} />;
 
-     case 'ai-tutor':
-  return (
-    <AITutorChat 
-      studentLevel={user?.profile?.grade?.includes('primary') ? 'primary' : 'highschool'} 
-      language={user?.profile?.preferredLanguage || 'en'} 
-    />
-  );
+      case 'ai-tutor':
+        return (
+          <AITutorChat
+            studentLevel={user?.profile?.grade?.includes('primary') ? 'primary' : 'highschool'}
+            language={user?.profile?.preferredLanguage || 'en'}
+          />
+        );
 
       case 'profile':
         return <Profile user={user} />;

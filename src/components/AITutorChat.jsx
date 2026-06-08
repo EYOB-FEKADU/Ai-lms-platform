@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askAITutor } from '../api';
 
-export default function AITutorChat({ studentLevel = 'highschool', language = 'en' }) {
-  const [messages, setMessages] = useState([
+export default function AITutorChat({ studentLevel = 'highschool', language = 'en', courseId = null }) {  const [messages, setMessages] = useState([
     {
       role: 'assistant',
       content: studentLevel === 'primary'
@@ -32,12 +31,13 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
-      const data = await askAITutor({
-        question: input,
-        studentLevel,
-        language,
-        conversationHistory: history,
-      });
+     const data = await askAITutor({
+  question: input,
+  studentLevel,
+  language,
+  courseId,
+  conversationHistory: history,
+});
 
       setMessages((prev) => [
         ...prev,
