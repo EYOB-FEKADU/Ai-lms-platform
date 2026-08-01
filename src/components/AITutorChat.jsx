@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askAITutor } from '../api';
 
-export default function AITutorChat({ studentLevel = 'highschool', language = 'en', courseId = null }) {  const [messages, setMessages] = useState([
+export default function AITutorChat({ studentLevel = 'highschool', language = 'en', courseId = null }) {
+  const [messages, setMessages] = useState([
     {
       role: 'assistant',
       content: studentLevel === 'primary'
@@ -11,6 +12,7 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -28,28 +30,27 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
     setLoading(true);
+    setError(null);
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
-     const data = await askAITutor({
-  question: input,
-  studentLevel,
-  language,
-  courseId,
-  conversationHistory: history,
-});
+      const data = await askAITutor({
+        question: input,
+        studentLevel: studentLevel || 'highschool',
+        language: language || 'en',
+        courseId: courseId || undefined,
+        conversationHistory: history,
+      });
 
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: data.response },
+        { role: 'assistant', content: data.response || 'No response from AI' },
       ]);
-    } catch (error) {
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'AI tutor unavailable');
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: 'Sorry, the AI tutor is currently unavailable. Please make sure the service is running.',
-        },
+        { role: 'assistant', content: 'Sorry, the AI tutor is currently unavailable. Please make sure the service is running.' },
       ]);
     } finally {
       setLoading(false);
@@ -64,8 +65,7 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col h-[calc(100vh-12rem)]">
-      {/* Header */}
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col min-h-[500px] max-h-[calc(100vh-10rem)]">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl">
           🤖
@@ -78,8 +78,12 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs p-2 rounded-lg text-center">
+            Error: {error}
+          </div>
+        )}
         {messages.map((msg, index) => (
           <div
             key={index}
@@ -92,19 +96,16 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
               }`}
             >
-              {msg.role === 'assistant' && (
-                <span className="text-lg mr-1">🤖</span>
-              )}
+              {msg.role === 'assistant' && <span className="text-lg mr-1">🤖</span>}
               <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
         ))}
-
         {loading && (
           <div className="flex justify-start">
             <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex gap-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
               </div>
@@ -114,29 +115,25 @@ export default function AITutorChat({ studentLevel = 'highschool', language = 'e
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700">
         <div className="flex gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask me anything... (Shift+Enter for new line)"
+            placeholder="Ask me anything..."
             rows={1}
-            className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white resize-none text-sm"
             disabled={loading}
           />
           <button
             onClick={handleSend}
             disabled={loading || !input.trim()}
-            className="px-5 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-medium"
+            className="px-5 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 font-medium"
           >
             {loading ? '...' : 'Send'}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-2 text-center">
-          💡 I use the Socratic method — I'll guide you to discover answers yourself!
-        </p>
       </div>
     </div>
   );
