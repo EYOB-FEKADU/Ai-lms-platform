@@ -1,35 +1,51 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { askAITutor, getChatHistory, saveChatMessage } from '../api';
+import { askAITutor, getChatHistory, saveChatMessage, getCourse, markLessonComplete, getQuizByModule } from '../api';
 import ModuleList from './ModuleList';
+import LessonNavigation from './LessonNavigation';
+import QuizComponent from './QuizComponent';
 
-export default function CourseWithAI({ course, courseId, onBack }) {
+export default function CourseWithAI({ courseId, onBack }) {
+  const [courseData, setCourseData] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeLesson, setActiveLesson] = useState(null);
+  const [lessonIndex, setLessonIndex] = useState(0);
+  const [completedLessons, setCompletedLessons] = useState([]);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const messagesEndRef = useRef(null);
 
-  // Load chat history
   useEffect(() => {
-    loadHistory();
+    if (courseId) {
+      fetchCourseData();
+      loadHistory();
+    }
   }, [courseId]);
+
+  const fetchCourseData = async () => {
+    try {
+      const data = await getCourse(courseId);
+      setCourseData(data.course);
+      if (data.course?.modules?.length > 0 && data.course.modules[0]?.lessons?.length > 0) {
+        setActiveLesson(data.course.modules[0].lessons[0]);
+        setLessonIndex(0);
+      }
+    } catch (err) {
+      console.error('Failed to load course:', err);
+    }
+  };
 
   const loadHistory = async () => {
     try {
       const data = await getChatHistory(courseId);
-      if (data.messages.length > 0) {
+      if (data.messages && data.messages.length > 0) {
         setMessages(data.messages);
       } else {
-        setMessages([{
-          role: 'assistant',
-          content: `Hello! I'm your AI tutor for **${course?.title || 'this course'}**. Feel free to ask me anything about the course material!`
-        }]);
+        setMessages([{ role: 'assistant', content: "Hello! I'm your AI tutor for this course. Ask me anything!" }]);
       }
     } catch {
-      setMessages([{
-        role: 'assistant',
-        content: `Hello! I'm your AI tutor for **${course?.title || 'this course'}**. Ask me anything!`
-      }]);
+      setMessages([{ role: 'assistant', content: "Hello! I'm your AI tutor. Ask me anything!" }]);
     }
   };
 
@@ -41,7 +57,6 @@ export default function CourseWithAI({ course, courseId, onBack }) {
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
-
     const userMsg = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -52,108 +67,190 @@ export default function CourseWithAI({ course, courseId, onBack }) {
       const data = await askAITutor({
         question: input,
         courseId,
+        lessonId: activeLesson?._id,
         studentLevel: 'highschool',
         language: 'en',
         conversationHistory: history
       });
-
-      const aiMsg = { role: 'assistant', content: data.response };
-      setMessages(prev => [...prev, aiMsg]);
-
-      // Save to backend
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
       saveChatMessage(courseId, 'user', input).catch(() => {});
       saveChatMessage(courseId, 'assistant', data.response).catch(() => {});
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, AI tutor unavailable.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'AI tutor unavailable.' }]);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleNextLesson = async () => {
+    if (activeLesson?._id) {
+      await markLessonComplete(activeLesson._id).catch(() => {});
+      setCompletedLessons(prev => [...prev, activeLesson._id]);
+    }
+
+    const currentModule = courseData?.modules?.find(m =>
+      m.lessons?.some(l => l._id === activeLesson?._id)
+    );
+
+    if (currentModule) {
+      const lessonIds = currentModule.lessons.map(l => l._id);
+      const currentIdx = lessonIds.indexOf(activeLesson._id);
+
+      // if (currentIdx === lessonIds.length - 1) {
+      //   setShowQuiz(true);
+      //   return;
+      // }
+      if (currentIdx === lessonIds.length - 1) {
+  // Check if quiz exists for this module
+  try {
+    const data = await getQuizByModule(currentModule._id);
+    if (data.quiz) {
+      setShowQuiz(true);
+    } else {
+      alert('Module complete! No quiz for this module.');
+    }
+  } catch {
+    alert('Module complete!');
+  }
+  return;
+}
+
+      setActiveLesson(currentModule.lessons[currentIdx + 1]);
+      setLessonIndex(currentIdx + 1);
+    }
+  };
+
+  const handlePreviousLesson = () => {
+    const currentModule = courseData?.modules?.find(m =>
+      m.lessons?.some(l => l._id === activeLesson?._id)
+    );
+    if (currentModule) {
+      const lessonIds = currentModule.lessons.map(l => l._id);
+      const currentIdx = lessonIds.indexOf(activeLesson._id);
+      if (currentIdx > 0) {
+        setActiveLesson(currentModule.lessons[currentIdx - 1]);
+        setLessonIndex(currentIdx - 1);
+      }
+    }
+  };
+
+  const totalLessons = courseData?.modules?.flatMap(m => m.lessons || []).length || 0;
+
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-8rem)]">
       {/* LEFT: Course Content */}
-      <div className="lg:w-1/2 overflow-y-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+      <div className={`overflow-y-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-all ${aiPanelCollapsed ? 'lg:w-full' : 'lg:flex-1'}`}>
         <button onClick={onBack} className="text-indigo-600 hover:underline mb-4 flex items-center gap-1">
-          ← Back
+          ← Back to Course
         </button>
-        
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{course?.title}</h1>
-        
-        {activeLesson ? (
+
+        {showQuiz ? (
+          <QuizComponent
+            moduleId={courseData?.modules?.find(m => m.lessons?.some(l => l._id === activeLesson?._id))?._id}
+            onComplete={(result) => {
+              setShowQuiz(false);
+              alert('Module completed! Next module unlocked.');
+            }}
+            onBack={() => setShowQuiz(false)}
+          />
+        ) : activeLesson ? (
           <div>
-            <button onClick={() => setActiveLesson(null)}
-              className="text-indigo-600 hover:underline mb-4 flex items-center gap-1 text-sm">
-              ← Back to Modules
-            </button>
-            <h2 className="text-lg font-semibold mb-2">{activeLesson.title}</h2>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{activeLesson.title}</h1>
+            <p className="text-sm text-gray-500 mb-6">
+              {activeLesson.contentType} {activeLesson.duration > 0 && `• ${activeLesson.duration} min`}
+            </p>
             <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
               {activeLesson.content || 'No content for this lesson.'}
             </div>
+            <LessonNavigation
+              currentIndex={lessonIndex}
+              totalLessons={totalLessons}
+              onPrevious={handlePreviousLesson}
+              onNext={handleNextLesson}
+              completedLessons={completedLessons}
+            />
           </div>
         ) : (
           <div>
-            <h2 className="text-lg font-semibold mb-4">Course Content</h2>
+            <h1 className="text-xl font-bold mb-4">{courseData?.title}</h1>
             <ModuleList
-              modules={course?.modules || []}
-              onLessonClick={(lesson) => setActiveLesson(lesson)}
+              modules={courseData?.modules || []}
+              onLessonClick={(lesson) => {
+                setActiveLesson(lesson);
+                setLessonIndex(0);
+              }}
             />
           </div>
         )}
       </div>
 
       {/* RIGHT: AI Chat */}
-      <div className="lg:w-1/2 bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-          <span className="text-xl">🤖</span>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white">AI Tutor</h3>
-            <p className="text-xs text-gray-500">Ask about {course?.title}</p>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                msg.role === 'user'
-                  ? 'bg-indigo-600 text-white rounded-br-md'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
-              }`}>
-                <div className="whitespace-pre-wrap">{msg.content}</div>
+      {!aiPanelCollapsed && (
+        <div className="w-96 bg-white dark:bg-gray-800 rounded-xl shadow-md flex flex-col">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🤖</span>
+              <div>
+                <h3 className="font-semibold text-sm">AI Tutor</h3>
+                <p className="text-xs text-gray-500">Lesson: {activeLesson?.title?.slice(0, 30) || 'General'}...</p>
               </div>
             </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl px-4 py-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex gap-2">
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-              placeholder="Ask about this course..."
-              className="flex-1 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm"
-            />
-            <button onClick={handleSend} disabled={loading}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium">
-              Send
+            <button onClick={() => setAiPanelCollapsed(true)} className="text-gray-400 hover:text-gray-600">
+              ✕
             </button>
           </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+                  msg.role === 'user'
+                    ? 'bg-indigo-600 text-white rounded-br-md'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-md'
+                }`}>
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl px-4 py-3">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex gap-2">
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+                placeholder="Ask about this lesson..."
+                className="flex-1 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm"
+              />
+              <button onClick={handleSend} disabled={loading}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 text-sm">
+                Send
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Collapsed AI Button */}
+      {aiPanelCollapsed && (
+        <button
+          onClick={() => setAiPanelCollapsed(false)}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl hover:bg-indigo-700 text-2xl"
+        >
+          🤖
+        </button>
+      )}
     </div>
   );
 }

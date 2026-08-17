@@ -189,3 +189,35 @@ export const saveChatMessage = async (courseId, role, content) => {
   const response = await api.post('/tutor/save-message', { courseId, role, content });
   return response.data;
 };
+
+// ─── QUIZ API ───
+export const getQuizByModule = async (moduleId) => {
+  const response = await api.get(`/quizzes/module/${moduleId}`);
+  return response.data;
+};
+
+export const submitQuiz = async (quizId, answers) => {
+  const response = await api.post(`/quizzes/${quizId}/submit`, { answers });
+  return response.data;
+};
+
+export const getStudentWeakAreas = async () => {
+  const response = await api.get('/quizzes/student-progress');
+  return response.data;
+};
+
+// ─── PROGRESS API ───
+export const markLessonComplete = async (lessonId) => {
+  const response = await api.post('/progress/mark-complete', { lessonId });
+  return response.data;
+};
+
+export const getCourseProgress = async (courseId) => {
+  const response = await api.get(`/progress/course/${courseId}`);
+  return response.data;
+};
+
+export const checkLessonUnlocked = async (lessonId) => {
+  const response = await api.get(`/progress/check-unlock/${lessonId}`);
+  return response.data;
+};
