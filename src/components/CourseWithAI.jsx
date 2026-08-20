@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { askAITutor, getChatHistory, saveChatMessage, getCourse, markLessonComplete, getQuizByModule } from '../api';
+import { askAITutor, getChatHistory, saveChatMessage, getCourse, markLessonComplete, getQuizByModule, getCourseProgress } from '../api';
 import ModuleList from './ModuleList';
 import LessonNavigation from './LessonNavigation';
 import QuizComponent from './QuizComponent';
+import QuizLessonParser from './QuizLessonParser';
 
 export default function CourseWithAI({ courseId, onBack }) {
   const [courseData, setCourseData] = useState(null);
@@ -13,6 +14,7 @@ export default function CourseWithAI({ courseId, onBack }) {
   const [lessonIndex, setLessonIndex] = useState(0);
   const [completedLessons, setCompletedLessons] = useState([]);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [quizPassed, setQuizPassed] = useState(false);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const messagesEndRef = useRef(null);
 
@@ -27,6 +29,27 @@ export default function CourseWithAI({ courseId, onBack }) {
     try {
       const data = await getCourse(courseId);
       setCourseData(data.course);
+
+      // Load student progress
+      try {
+        const progressData = await getCourseProgress(courseId);
+        const completedIds = progressData.progress
+          ?.filter(p => p.status === 'completed')
+          ?.map(p => p.lesson) || [];
+        setCompletedLessons(completedIds);
+
+        // Find last completed lesson and jump to next
+        const allLessons = data.course?.modules?.flatMap(m => m.lessons || []) || [];
+        if (completedIds.length > 0 && completedIds.length < allLessons.length) {
+          const nextLesson = allLessons[completedIds.length];
+          if (nextLesson) {
+            setActiveLesson(nextLesson);
+            setLessonIndex(completedIds.length);
+            return;
+          }
+        }
+      } catch {}
+
       if (data.course?.modules?.length > 0 && data.course.modules[0]?.lessons?.length > 0) {
         setActiveLesson(data.course.modules[0].lessons[0]);
         setLessonIndex(0);
@@ -73,8 +96,8 @@ export default function CourseWithAI({ courseId, onBack }) {
         conversationHistory: history
       });
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
-      saveChatMessage(courseId, 'user', input).catch(() => {});
-      saveChatMessage(courseId, 'assistant', data.response).catch(() => {});
+      setTimeout(() => saveChatMessage(courseId, 'user', input).catch(() => {}), 0);
+      setTimeout(() => saveChatMessage(courseId, 'assistant', data.response).catch(() => {}), 0);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'AI tutor unavailable.' }]);
     } finally {
@@ -83,8 +106,15 @@ export default function CourseWithAI({ courseId, onBack }) {
   };
 
   const handleNextLesson = async () => {
+    // BLOCK NEXT if current lesson is a quiz and not passed
+    if (activeLesson?.contentType === 'quiz' && !quizPassed) {
+      alert('You must pass the quiz before proceeding to the next lesson.');
+      return;
+    }
+
     if (activeLesson?._id) {
-      await markLessonComplete(activeLesson._id).catch(() => {});
+      console.log('Marking complete:', activeLesson._id, 'Type:', activeLesson.contentType);
+      await markLessonComplete(activeLesson._id).catch((e) => console.log('Mark error:', e));
       setCompletedLessons(prev => [...prev, activeLesson._id]);
     }
 
@@ -96,24 +126,19 @@ export default function CourseWithAI({ courseId, onBack }) {
       const lessonIds = currentModule.lessons.map(l => l._id);
       const currentIdx = lessonIds.indexOf(activeLesson._id);
 
-      // if (currentIdx === lessonIds.length - 1) {
-      //   setShowQuiz(true);
-      //   return;
-      // }
       if (currentIdx === lessonIds.length - 1) {
-  // Check if quiz exists for this module
-  try {
-    const data = await getQuizByModule(currentModule._id);
-    if (data.quiz) {
-      setShowQuiz(true);
-    } else {
-      alert('Module complete! No quiz for this module.');
-    }
-  } catch {
-    alert('Module complete!');
-  }
-  return;
-}
+        try {
+          const data = await getQuizByModule(currentModule._id);
+          if (data.quiz) {
+            setShowQuiz(true);
+          } else {
+            alert('Module complete! No quiz for this module.');
+          }
+        } catch {
+          alert('Module complete!');
+        }
+        return;
+      }
 
       setActiveLesson(currentModule.lessons[currentIdx + 1]);
       setLessonIndex(currentIdx + 1);
@@ -160,7 +185,7 @@ export default function CourseWithAI({ courseId, onBack }) {
               {activeLesson.contentType} {activeLesson.duration > 0 && `• ${activeLesson.duration} min`}
             </p>
             <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-              {activeLesson.content || 'No content for this lesson.'}
+              {activeLesson.contentType === 'quiz' ? <QuizLessonParser content={activeLesson.content} onPass={() => setQuizPassed(true)} /> : (activeLesson.content || 'No content for this lesson.')}
             </div>
             <LessonNavigation
               currentIndex={lessonIndex}
