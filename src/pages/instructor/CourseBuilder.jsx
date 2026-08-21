@@ -1,6 +1,5 @@
 // pages/instructor/CourseBuilder.jsx
 import { indexCourseForAI } from '../../api';
-// import { indexCourseForAI } from '../../api';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -77,14 +76,17 @@ const handleIndexForAI = async () => {
       allContent += `Module: ${mod.title}\n`;
       if (mod.lessons) {
         for (const lesson of mod.lessons) {
-          allContent += `Lesson: ${lesson.title}\n${lesson.content || ''}\n`;
+          // Limit each lesson to 5000 chars to avoid timeout
+          const lessonContent = lesson.content || '';
+          allContent += `Lesson: ${lesson.title}\n${lessonContent.slice(0, 5000)}\n`;
         }
       }
     }
     await indexCourseForAI(courseId, allContent);
     alert('✅ Course indexed for AI Tutor! Students will get course-specific answers.');
   } catch (err) {
-    alert('❌ Failed to index course');
+    console.error('Index error:', err);
+    alert('❌ Failed to index course: ' + (err.response?.data?.error || err.message));
   }
 };
   const handleAddModule = async () => {
