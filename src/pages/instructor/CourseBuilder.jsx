@@ -69,26 +69,43 @@ export default function CourseBuilder({ courseId: propCourseId, onSave, onCancel
       setSaving(false);
     }
   };
-const handleIndexForAI = async () => {
-  try {
-    let allContent = `Course: ${course.title}\n${course.description}\n\n`;
-    for (const mod of modules) {
-      allContent += `Module: ${mod.title}\n`;
-      if (mod.lessons) {
-        for (const lesson of mod.lessons) {
-          // Limit each lesson to 5000 chars to avoid timeout
-          const lessonContent = lesson.content || '';
-          allContent += `Lesson: ${lesson.title}\n${lessonContent.slice(0, 5000)}\n`;
+  const handleIndexForAI = async () => {
+    try {
+      const chunks = [];
+      
+      // Course overview chunk
+      chunks.push(`Course: ${course.title}\n${course.description}\n\n`);
+      
+      for (const mod of modules) {
+        let moduleContent = `Module: ${mod.title}\n`;
+        
+        if (mod.lessons) {
+          for (const lesson of mod.lessons) {
+            const lessonContent = lesson.content || '';
+            const lessonChunk = `Lesson: ${lesson.title}\n${lessonContent.slice(0, 3000)}\n`;
+            
+            if (moduleContent.length + lessonChunk.length > 6000) {
+              chunks.push(moduleContent);
+              moduleContent = `Module: ${mod.title} (continued)\n`;
+            }
+            moduleContent += lessonChunk;
+          }
         }
+        
+        if (moduleContent.trim()) chunks.push(moduleContent);
       }
+      
+      // Index each chunk sequentially
+      for (let i = 0; i < chunks.length; i++) {
+        await indexCourseForAI(`${courseId}_part${i}`, chunks[i]);
+      }
+      
+      alert(`✅ Course indexed in ${chunks.length} parts!`);
+    } catch (err) {
+      console.error('Index error:', err);
+      alert('❌ Failed to index course: ' + (err.response?.data?.error || err.message));
     }
-    await indexCourseForAI(courseId, allContent);
-    alert('✅ Course indexed for AI Tutor! Students will get course-specific answers.');
-  } catch (err) {
-    console.error('Index error:', err);
-    alert('❌ Failed to index course: ' + (err.response?.data?.error || err.message));
-  }
-};
+  };
   const handleAddModule = async () => {
     const title = prompt('Module title:');
     if (!title) return;
